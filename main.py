@@ -43,7 +43,7 @@ TP_SL_CHECK_EVERY = 30  # секунд
 ACCESS_DAYS = 30
 ACCESS_SECONDS = ACCESS_DAYS * 24 * 60 * 60
 
-AUTO_INTERVALS_MIN = [5, 15, 30]  # доступные интервалы авто-анализа
+AUTO_INTERVALS_MIN = [30]  # доступные интервалы авто-анализа
 
 
 # ================== DATA ==================
