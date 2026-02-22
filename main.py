@@ -29,7 +29,12 @@ if not ADMIN_ID:
 
 DB_PATH = "bot.db"
 
-SUPPORTED_SYMBOLS = ["EUR/USD", "XAU/USD"]
+SUPPORTED_SYMBOLS = [
+    "EUR/USD",
+    "XAU/USD",
+    "GBP/USD",
+    "USD/JPY"
+]
 SUPPORTED_TF = ["5min", "15min", "30min"]
 TF_LABELS = {"5min": "5M", "15min": "15M", "30min": "30M"}
 
