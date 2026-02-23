@@ -222,28 +222,58 @@ async def check_tp_sl_for_user(bot: Bot, user_id: int):
 
 # ================== STRATEGY ==================
 def make_signal(symbol: str, tf: str, highs, lows, closes):
-    ema9 = ema(closes, 9)
-    ema21 = ema(closes, 21)
+    ema_fast = ema(closes, 9)
+    ema_slow = ema(closes, 21)
+    ema_trend = ema(closes, 50)
+
     r = rsi(closes, 14)
     a = atr(highs, lows, closes, 14)
 
-    if ema9 is None or ema21 is None or r is None or a is None:
+    if ema_fast is None or ema_slow is None or ema_trend is None or r is None or a is None:
         return None
 
     last = closes[-1]
+    atr_pct = a / last
 
     direction = None
-    if ema9 > ema21 and r >= 55:
+
+    # базовый сигнал
+    if ema_fast > ema_slow and r >= 55:
         direction = "BUY"
-    elif ema9 < ema21 and r <= 45:
+    elif ema_fast < ema_slow and r <= 45:
         direction = "SELL"
     else:
         return None
 
-    tp_mult = 1.2
-    sl_mult = 0.8
+    score = 0
+
+    # тренд-фильтр
+    if direction == "BUY" and last > ema_trend:
+        score += 1
+    if direction == "SELL" and last < ema_trend:
+        score += 1
+
+    # усиленный RSI
+    if direction == "BUY" and r >= 60:
+        score += 1
+    if direction == "SELL" and r <= 40:
+        score += 1
+
+    # волатильность (если рынок мёртвый — пропускаем)
+    if atr_pct > 0.0005:
+        score += 1
+    else:
+        return None
+
+    # минимум подтверждений
+    if score < 2:
+        return None
+
+    tp_mult = 1.5
+    sl_mult = 1.0
 
     entry = last
+
     if direction == "BUY":
         tp = entry + a * tp_mult
         sl = entry - a * sl_mult
@@ -251,7 +281,7 @@ def make_signal(symbol: str, tf: str, highs, lows, closes):
         tp = entry - a * tp_mult
         sl = entry + a * sl_mult
 
-    note = f"EMA9 {'>' if direction=='BUY' else '<'} EMA21 | RSI={r:.1f} | ATR={a:.6f}"
+    note = f"EMA9/21 | EMA50 trend | RSI={r:.1f} | ATR%={atr_pct:.5f} | Score={score}"
     return direction, entry, tp, sl, note
 
 
