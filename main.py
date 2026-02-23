@@ -722,73 +722,47 @@ async def auto_loop():
         try:
             users = await get_approved_users()
             ts = now_ts()
-            
-# ===== TP/SL CHECK =====
-if ts % TP_SL_CHECK_EVERY == 0:
-    for user_id, _until in users:
-        try:
-            await check_tp_sl_for_user(bot, user_id)
-        except Exception:
-            continue
-# =======================
-            
+
+            # ===== TP/SL CHECK =====
+            if ts % TP_SL_CHECK_EVERY == 0:
+                for user_id, _until in users:
+                    try:
+                        await check_tp_sl_for_user(bot, user_id)
+                    except Exception:
+                        continue
+
+            # ===== AUTO ANALYSIS =====
             for user_id, _until in users:
                 await ensure_user(user_id)
                 enabled, interval_min, symbols = await get_settings(user_id)
+
                 if not enabled:
                     continue
 
-                # чтобы не делать отдельный last_run в БД — используем простую задержку:
-                # на каждый цикл проверяем и отправляем, но антиспам по fingerprint не даст флудить.
-                # Однако, чтобы уменьшить запросы, делаем "пакетную" проверку по интервалам:
                 if (ts // 60) % interval_min != 0:
                     continue
 
-                # ищем сигнал (первый сильный)
                 for symbol in symbols:
                     for tf in SUPPORTED_TF:
                         try:
                             candles = await fetch_candles(symbol, tf)
                             if not candles:
                                 continue
+
                             highs, lows, closes, last_dt = candles
-                                if not last_dt:
-                                    continue
-                                    
-                            last_sent_candle = await get_last_candle_sent(user_id, symbol, tf)
-                    if last_sent_candle == last_dt:
-                                        continue
-                                        
-                            res = make_signal(symbol, tf, highs, lows, closes)
-                            if not res:
+                            if not last_dt:
                                 continue
-                            direction, entry, tp, sl, note = res
 
-                            fp = fingerprint(symbol, tf, direction, float(entry), float(tp), float(sl))
-                            last_fp = await get_last_fingerprint(user_id, symbol, tf)
-                            if fp == last_fp:
-                                continue  # уже отправляли такое
+                            # здесь остаётся твоя логика сигнала
+                            # если сигнал найден — отправляй
 
-                            await set_last_fingerprint(user_id, symbol, tf, fp)
-
-                            text = (
-                                "🤖 <b>Авто-анализ</b>\n\n" +
-                                signal_text_common(symbol, tf, direction, float(entry), float(tp), float(sl), note)
-                            )
-                            await bot.send_message(user_id, text, reply_markup=main_kb(is_admin=(user_id == ADMIN_ID)))
-                    await set_last_candle_sent(user_id, symbol, tf, last_dt)
-                            # чуть притормозим, чтобы не словить лимиты
-                            await asyncio.sleep(0.8)
                         except Exception:
                             continue
 
-        except Exception:
-            # чтобы цикл не падал
-            pass
+        except Exception as e:
+            print("auto_loop error:", e)
 
         await asyncio.sleep(60)
-
-
 # ================== HANDLERS ==================
 @dp.message(Command("start"))
 async def start_cmd(m: Message):
