@@ -340,6 +340,22 @@ async def db_init():
             PRIMARY KEY (user_id, symbol, tf)
         )
         """)
+        await db.execute("""
+    CREATE TABLE IF NOT EXISTS open_trades (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        symbol TEXT NOT NULL,
+        tf TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        entry REAL NOT NULL,
+        tp REAL NOT NULL,
+        sl REAL NOT NULL,
+        opened_at INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        closed_at INTEGER DEFAULT NULL,
+        close_reason TEXT DEFAULT NULL
+    );
+    """)
         await db.commit()
 
 
@@ -356,6 +372,94 @@ async def ensure_user(user_id: int):
         )
 
         await db.commit()
+        # ================= OPEN TRADES =================
+
+async def add_open_trade(user_id: int, symbol: str, tf: str,
+                         direction: str, entry: float, tp: float, sl: float):
+    ts = now_ts()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO open_trades(user_id, symbol, tf, direction, entry, tp, sl, opened_at, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, symbol, tf, direction,
+              float(entry), float(tp), float(sl), int(ts), "open"))
+        await db.commit()
+
+
+async def get_open_trades(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute("""
+            SELECT id, symbol, tf, direction, entry, tp, sl, opened_at
+            FROM open_trades
+            WHERE user_id=? AND status='open'
+        """, (user_id,))
+        return await cur.fetchall()
+
+
+async def close_trade(trade_id: int, reason: str):
+    ts = now_ts()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            UPDATE open_trades
+            SET status='closed',
+                closed_at=?,
+                close_reason=?
+            WHERE id=?
+        """, (int(ts), reason, int(trade_id)))
+        await db.commit()
+
+
+async def check_tp_sl_for_user(bot, user_id: int):
+    trades = await get_open_trades(user_id)
+    if not trades:
+        return
+
+    for trade_id, symbol, tf, direction, entry, tp, sl, opened_at in trades:
+        candles = await fetch_candles(symbol, tf)
+        if not candles:
+            continue
+
+        highs, lows, closes, last_dt = candles
+        if not closes:
+            continue
+
+        price = float(closes[-1])
+
+        hit_tp = False
+        hit_sl = False
+
+        if direction == "BUY":
+            if price >= float(tp):
+                hit_tp = True
+            elif price <= float(sl):
+                hit_sl = True
+        else:  # SELL
+            if price <= float(tp):
+                hit_tp = True
+            elif price >= float(sl):
+                hit_sl = True
+
+        if not (hit_tp or hit_sl):
+            continue
+
+        reason = "tp" if hit_tp else "sl"
+
+await close_trade(trade_id, reason)
+
+        text = (
+            f"📣 <b>{symbol} {tf}</b>\n"
+            f"Сработало: <b>{reason}</b>\n"
+            f"Direction: {direction}\n"
+            f"Entry: {entry}\n"
+            f"TP: {tp}\n"
+            f"SL: {sl}\n"
+            f"Price now: {price}"
+        )
+
+        try:
+            await bot.send_message(user_id, text)
+        except Exception:
+            pass
 
 
 async def get_user_access(user_id: int) -> tuple[str, int, int]:
