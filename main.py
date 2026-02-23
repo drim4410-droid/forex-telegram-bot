@@ -174,12 +174,6 @@ async def fetch_quote(symbol: str) -> float | None:
         return float(data["price"])
     except Exception:
         return None
-        async def fetch_quote(symbol: str) -> float | None:
-    ...
-    try:
-        return float(data["price"])
-    except Exception:
-        return None
 
 
 def tp_sl_hit(direction: str, price: float, tp: float, sl: float) -> str | None:
