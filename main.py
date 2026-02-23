@@ -153,10 +153,11 @@ async def fetch_candles(symbol: str, interval: str):
         return None
 
     values = list(reversed(values))  # от старых к новым
+    last_dt = values[-1].get("datetime")
     highs = [float(v["high"]) for v in values]
     lows = [float(v["low"]) for v in values]
     closes = [float(v["close"]) for v in values]
-    return highs, lows, closes
+    return highs, lows, closes, last_dt
 
 
 async def fetch_quote(symbol: str) -> float | None:
@@ -515,6 +516,38 @@ async def get_last_fingerprint(user_id: int, symbol: str, tf: str) -> str:
         )
         row = await cur.fetchone()
         return row[0] if row else ""
+        async def ensure_last_candle_table():
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS last_candle_sent (
+          user_id INTEGER NOT NULL,
+          symbol TEXT NOT NULL,
+          tf TEXT NOT NULL,
+          candle_dt TEXT NOT NULL,
+          PRIMARY KEY (user_id, symbol, tf)
+        );
+        """)
+        await db.commit()
+
+
+async def get_last_candle_sent(user_id: int, symbol: str, tf: str) -> str | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "SELECT candle_dt FROM last_candle_sent WHERE user_id=? AND symbol=? AND tf=?",
+            (user_id, symbol, tf)
+        )
+        row = await cur.fetchone()
+        return row[0] if row else None
+
+
+async def set_last_candle_sent(user_id: int, symbol: str, tf: str, candle_dt: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO last_candle_sent(user_id,symbol,tf,candle_dt) VALUES(?,?,?,?) "
+            "ON CONFLICT(user_id,symbol,tf) DO UPDATE SET candle_dt=excluded.candle_dt",
+            (user_id, symbol, tf, candle_dt)
+        )
+        await db.commit()
 
 
 # ================== UI ==================
@@ -690,6 +723,7 @@ def fingerprint(symbol: str, tf: str, direction: str, entry: float, tp: float, s
 
 
 async def auto_loop():
+    await ensure_last_candle_table()
     # общий цикл: каждый 60 сек проверяем, кому пора отправлять
     while True:
         try:
@@ -724,7 +758,14 @@ if ts % TP_SL_CHECK_EVERY == 0:
                             candles = await fetch_candles(symbol, tf)
                             if not candles:
                                 continue
-                            highs, lows, closes = candles
+                            highs, lows, closes, last_dt = candles
+                                if not last_dt:
+                                    continue
+                                    
+                            last_sent_candle = await get_last_candle_sent(user_id, symbol, tf)
+                    if last_sent_candle == last_dt:
+                                        continue
+                                        
                             res = make_signal(symbol, tf, highs, lows, closes)
                             if not res:
                                 continue
@@ -742,6 +783,7 @@ if ts % TP_SL_CHECK_EVERY == 0:
                                 signal_text_common(symbol, tf, direction, float(entry), float(tp), float(sl), note)
                             )
                             await bot.send_message(user_id, text, reply_markup=main_kb(is_admin=(user_id == ADMIN_ID)))
+                    await set_last_candle_sent(user_id, symbol, tf, last_dt)
                             # чуть притормозим, чтобы не словить лимиты
                             await asyncio.sleep(0.8)
                         except Exception:
