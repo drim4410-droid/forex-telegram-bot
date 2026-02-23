@@ -315,16 +315,16 @@ async def db_init():
 
 async def ensure_user(user_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
-        # users: безопасная вставка (не упадёт, если user уже есть)
-await db.execute(
-    "INSERT OR IGNORE INTO users (user_id, status, approved_until, requested_at) VALUES (?, 'pending', 0, 0)",
-    (user_id,)
-)
-        # user_settings: безопасная вставка
-await db.execute(
-    "INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)",
-    (user_id,)
-)
+        await db.execute(
+            "INSERT OR IGNORE INTO users (user_id, status, approved_until, requested_at) VALUES (?, 'pending', 0, 0)",
+            (user_id,)
+        )
+
+        await db.execute(
+            "INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)",
+            (user_id,)
+        )
+
         await db.commit()
 
 
