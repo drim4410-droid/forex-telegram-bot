@@ -511,7 +511,7 @@ async def get_last_fingerprint(user_id: int, symbol: str, tf: str) -> str:
         return row[0] if row else ""
     async def ensure_last_candle_table():
         async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
+            await db.execute("""
         CREATE TABLE IF NOT EXISTS last_candle_sent (
             user_id INTEGER NOT NULL,
             symbol TEXT NOT NULL,
