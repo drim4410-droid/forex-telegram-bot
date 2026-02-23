@@ -444,7 +444,7 @@ async def check_tp_sl_for_user(bot, user_id: int):
 
         reason = "tp" if hit_tp else "sl"
 
-await close_trade(trade_id, reason)
+        await close_trade(trade_id, reason)
 
         text = (
             f"📣 <b>{symbol} {tf}</b>\n"
