@@ -509,15 +509,15 @@ async def get_last_fingerprint(user_id: int, symbol: str, tf: str) -> str:
         )
         row = await cur.fetchone()
         return row[0] if row else ""
-        async def ensure_last_candle_table():
+    async def ensure_last_candle_table():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
         CREATE TABLE IF NOT EXISTS last_candle_sent (
-          user_id INTEGER NOT NULL,
-          symbol TEXT NOT NULL,
-          tf TEXT NOT NULL,
-          candle_dt TEXT NOT NULL,
-          PRIMARY KEY (user_id, symbol, tf)
+            user_id INTEGER NOT NULL,
+            symbol TEXT NOT NULL,
+            tf TEXT NOT NULL,
+            candle_dt TEXT NOT NULL,
+            PRIMARY KEY (user_id, symbol, tf)
         );
         """)
         await db.commit()
