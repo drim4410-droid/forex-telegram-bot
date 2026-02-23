@@ -35,8 +35,8 @@ SUPPORTED_SYMBOLS = [
     "GBP/USD",
     "USD/JPY"
 ]
-SUPPORTED_TF = ["5min", "15min", "30min"]
-TF_LABELS = {"5min": "5M", "15min": "15M", "30min": "30M"}
+SUPPORTED_TF = ["30min"]
+TF_LABELS = {"30min":"30M"}
 
 CANDLES = 120
 TP_SL_CHECK_EVERY = 30  # секунд
@@ -173,6 +173,57 @@ async def fetch_quote(symbol: str) -> float | None:
         return float(data["price"])
     except Exception:
         return None
+        async def fetch_quote(symbol: str) -> float | None:
+    ...
+    try:
+        return float(data["price"])
+    except Exception:
+        return None
+
+
+def tp_sl_hit(direction: str, price: float, tp: float, sl: float) -> str | None:
+    if direction == "BUY":
+        if price >= tp:
+            return "TP"
+        if price <= sl:
+            return "SL"
+    else:  # SELL
+        if price <= tp:
+            return "TP"
+        if price >= sl:
+            return "SL"
+    return None
+
+
+async def check_tp_sl_for_user(bot: Bot, user_id: int):
+    sig = await get_active_signal(user_id)
+    if not sig:
+        return
+
+    price = await fetch_quote(sig.symbol)
+    if price is None:
+        return
+
+    hit = tp_sl_hit(sig.direction, float(price), float(sig.tp), float(sig.sl))
+    if not hit:
+        return
+
+    await close_signal(user_id)
+
+    await bot.send_message(
+        user_id,
+        f"✅ {sig.symbol} — {hit} достигнут!\n"
+        f"TF: {TF_LABELS.get(sig.tf, sig.tf)}\n"
+        f"Direction: {sig.direction}\n"
+        f"Entry: {sig.entry}\n"
+        f"TP: {sig.tp}\n"
+        f"SL: {sig.sl}\n"
+        f"Price now: {price}"
+    )
+
+
+# ============ STRATEGY ============
+def make_signal(...):
 
 
 # ================== STRATEGY ==================
@@ -644,7 +695,16 @@ async def auto_loop():
         try:
             users = await get_approved_users()
             ts = now_ts()
-
+            
+# ===== TP/SL CHECK =====
+if ts % TP_SL_CHECK_EVERY == 0:
+    for user_id, _until in users:
+        try:
+            await check_tp_sl_for_user(bot, user_id)
+        except Exception:
+            continue
+# =======================
+            
             for user_id, _until in users:
                 await ensure_user(user_id)
                 enabled, interval_min, symbols = await get_settings(user_id)
