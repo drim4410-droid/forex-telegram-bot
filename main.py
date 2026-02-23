@@ -218,8 +218,6 @@ async def check_tp_sl_for_user(bot: Bot, user_id: int):
     )
 
 
-# ============ STRATEGY ============
-def make_signal(...):
 
 
 # ================== STRATEGY ==================
